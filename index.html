@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abidjan Pharma-Suivi | Professionnel</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #2ecc71;
+            --primary-dark: #27ae60;
+            --danger-color: #e74c3c;
+            --dark-blue: #2c3e50;
+            --bg-light: #f8f9fa;
+            --accent-blue: #2980b9;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            background: #eef2f3;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* --- FILTRES & RECHERCHE --- */
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 280px;
+            border: 1px solid rgba(255,255,255,0.8);
+        }
+
+        .control-panel h3 {
+            margin: 0 0 15px 0;
+            font-size: 15px;
+            color: var(--dark-blue);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 700;
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 15px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px 35px 10px 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 13px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .search-box input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.2); }
+        .search-box i { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #a0aec0; font-size: 14px; }
+
+        .filter-btn {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #4a5568;
+            transition: all 0.2s ease;
+        }
+
+        .filter-btn:hover { background: var(--bg-light); transform: translateY(-1px); }
+        .filter-btn.active { background: #edfcf2; border-color: var(--primary-color); color: var(--primary-dark); }
+        .filter-btn#btn-garde.active { background: #fff5f5; border-color: var(--danger-color); color: var(--danger-color); }
+
+        /* --- BARRE D'OUTILS INTELLIGENTE (MESURES / NUITS) --- */
+        .toolbar-vertical {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .tool-btn {
+            background: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--dark-blue);
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .tool-btn:hover { transform: scale(1.05); background: var(--bg-light); }
+        .tool-btn.active { background: var(--accent-blue); color: white; }
+        
+        /* Sous-panneau de contrôle des mesures (Dynamique) */
+        .measure-actions-panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .measure-actions-panel button {
+            border: none;
+            background: transparent;
+            padding: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #4a5568;
+            transition: background 0.2s;
+        }
+        .measure-actions-panel button:hover { background: var(--bg-light); }
+        .measure-actions-panel button.btn-confirm { color: var(--primary-dark); border-bottom: 1px solid #edf2f7; }
+        .measure-actions-panel button.btn-delete { color: var(--danger-color); }
+
+        /* --- SIDEBAR PROFESSIONNELLE --- */
+        .sidebar {
+            position: absolute;
+            top: 20px;
+            right: 80px;
+            width: 360px;
+            max-height: calc(100vh - 40px);
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: translateX(460px);
+            opacity: 0;
+        }
+        .sidebar.active { transform: translateX(0); opacity: 1; }
+
+        .sidebar-header { padding: 20px; background: var(--dark-blue); color: white; border-top-left-radius: 16px; border-top-right-radius: 16px; position: relative; }
+        .sidebar-header h2 { margin: 0; font-size: 17px; font-weight: 600; padding-right: 25px; line-height: 1.3; }
+        .close-btn { position: absolute; top: 20px; right: 20px; background: none; border: none; color: #a0aec0; font-size: 22px; cursor: pointer; transition: color 0.2s; }
+        .close-btn:hover { color: white; }
+        
+        .sidebar-body { padding: 20px; overflow-y: auto; flex-grow: 1; font-size: 14px; color: #2d3748; }
+
+        /* --- INTERACTION CLIENT INTELLIGENTE --- */
+        .action-routing-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            transition: background 0.2s;
+            text-decoration: none;
+        }
+        .action-routing-btn:hover { background: #2171a3; }
+        
+        .action-call-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            text-decoration: none;
+        }
+
+        /* --- BADGES & OUTILS DE MESURES --- */
+        .measure-tooltip {
+            background: rgba(44, 62, 80, 0.95);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            font-weight: 600;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+
+        .pharmacy-icon-div { display: flex; justify-content: center; align-items: center; background: white; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 2.5px solid var(--primary-dark); transition: all 0.2s; }
+        .pharmacy-icon-div i { font-size: 13px; color: var(--primary-dark); }
+        .pharmacy-icon-div.on-duty { border-color: var(--danger-color); background: #fff5f5; }
+        .pharmacy-icon-div.on-duty i { color: var(--danger-color); }
+
+        .info-row { display: flex; margin-bottom: 12px; align-items: flex-start; border-bottom: 1px solid #edf2f7; padding-bottom: 8px; }
+        .info-label { font-weight: 600; color: #718096; min-width: 90px; font-size: 13px; }
+        .info-value { flex-grow: 1; color: var(--dark-blue); font-weight: 500; }
+        
+        .badge { padding: 6px 14px; border-radius: 50px; font-size: 11px; font-weight: 700; display: inline-block; margin-bottom: 15px; letter-spacing: 0.5px; }
+        .badge-garde { background: var(--danger-color); color: white; animation: pulse 2s infinite; }
+        .badge-ouvert { background: var(--primary-color); color: white; }
+        .distance-box { background: #eef2f3; border-left: 4px solid var(--accent-blue); padding: 12px; border-radius: 0 8px 8px 0; margin-bottom: 20px; font-weight: 600; color: #2c3e50; display: flex; justify-content: space-between; }
+
+        /* --- FILTRE DE NUIT FILTRE INVERSÉ (DARK MODE MAP) --- */
+        .dark-theme-map {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { width: calc(100vw - 40px); right: 20px; left: 20px; bottom: 20px; top: auto; max-height: 45vh; transform: translateY(500px); }
+            .sidebar.active { transform: translateY(0); }
+            .toolbar-vertical { top: auto; bottom: 20px; right: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="control-panel">
+        <h3>Abidjan Pharma-Suivi</h3>
+        <div class="search-box">
+            <input type="text" id="search-input" placeholder="Nom de l'officine..." oninput="searchPharmacy()">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </div>
+        <button class="filter-btn active" id="btn-all" onclick="filterData('all')">
+            <i class="fa-solid fa-map-marked-alt" style="margin-right: 10px; color: #4a5568;"></i> Toutes les pharmacies
+        </button>
+        <button class="filter-btn" id="btn-garde" onclick="filterData('garde')">
+            <i class="fa-solid fa-star-of-life" style="margin-right: 10px; color: var(--danger-color);"></i> Uniquement de Garde
+        </button>
+    </div>
+
+    <div class="toolbar-vertical">
+        <button class="tool-btn" id="measure-btn" onclick="toggleMeasureMode()" title="Outil de mesure de distance">
+            <i class="fa-solid fa-ruler-combined"></i>
+        </button>
+        
+        <div class="measure-actions-panel" id="measure-panel">
+            <button class="btn-confirm" onclick="stopMeasuring(true)" title="Valider et enregistrer le tracé">
+                <i class="fa-solid fa-check"></i>
+            </button>
+            <button class="btn-undo" onclick="undoLastMeasurePoint()" title="Annuler le dernier point">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button class="btn-delete" onclick="resetMeasure(true)" title="Supprimer et tout effacer">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+
+        <button class="tool-btn" id="theme-btn" onclick="toggleNightMode()" title="Mode nuit (confort visuel d'urgence)">
+            <i class="fa-solid fa-moon"></i>
+        </button>
+    </div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2 id="side-name">Chargement...</h2>
+            <button class="close-btn" onclick="closeSidebar()">&times;</button>
+        </div>
+        <div class="sidebar-body" id="sidebar-content"></div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script>
+        const map = L.map('map', { zoomControl: false }).setView([5.3484, -4.0305], 12);
+        L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+        let userLatLng = null;
+        let geojsonLayer = null;
+        let currentFilter = 'all'; 
+        let rawGeoJSONData = null;
+
+        // Variables Système de Mesure Natif
+        let isMeasuring = false;
+        let measurePoints = [];
+        let measureLine = null;
+        let measureMarkers = [];
+        let liveMoveMarker = null;
+
+        const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        // Contour Urbain Abidjan via GeoJSON optionnel
+        fetch('Pharmacies_Abidjan.geojson').then(res => res.json()).then(data => {
+            L.geoJSON(data, { style: { color: "#34495e", weight: 1.5, opacity: 0.3, fillOpacity: 0.01 } }).addTo(map);
+        }).catch(() => {});
+
+        /* --- SMART LOGIQUE : MODE NUIT POUR RECHERCHE SÉCURISÉE --- */
+        function toggleNightMode() {
+            const mapDiv = document.getElementById('map');
+            const themeBtn = document.getElementById('theme-btn');
+            mapDiv.classList.toggle('dark-theme-map');
+            if(mapDiv.classList.contains('dark-theme-map')) {
+                themeBtn.innerHTML = `<i class="fa-solid fa-sun"></i>`;
+                themeBtn.style.background = "#f1c40f";
+            } else {
+                themeBtn.innerHTML = `<i class="fa-solid fa-moon"></i>`;
+                themeBtn.style.background = "white";
+            }
+        }
+
+        /* --- SYSTÈME DE MESURE AVANCÉ ET SANS INTERFÉRENCE --- */
+        function toggleMeasureMode() {
+            const btn = document.getElementById('measure-btn');
+            const panel = document.getElementById('measure-panel');
+            
+            if (!isMeasuring) {
+                isMeasuring = true;
+                btn.classList.add('active');
+                panel.style.display = 'flex';
+                document.getElementById('map').style.cursor = 'crosshair';
+                resetMeasure(false);
+                
+                map.on('click', onMapMeasureClick);
+                map.on('mousemove', onMapMeasureMove);
+                map.on('dblclick', () => stopMeasuring(true));
+                map.doubleClickZoom.disable();
+                closeSidebar();
+            } else {
+                stopMeasuring(true);
+            }
+        }
+
+        function onMapMeasureClick(e) {
+            const latlng = e.latlng;
+            measurePoints.push(latlng);
+
+            let totalDist = calculateTotalDistance();
+            let labelText = measurePoints.length === 1 ? "Départ" : (totalDist > 1000 ? (totalDist/1000).toFixed(2) + ' km' : Math.round(totalDist) + ' m');
+
+            const marker = L.circleMarker(latlng, {
+                radius: 6,
+                color: '#2c3e50',
+                fillColor: '#e74c3c',
+                fillOpacity: 1,
+                weight: 2
+            }).addTo(map).bindTooltip(labelText, { permanent: true, direction: 'top', className: 'measure-tooltip', offset: [0, -6] });
+
+            measureMarkers.push(marker);
+            measureLine.setLatLngs(measurePoints);
+        }
+
+        function onMapMeasureMove(e) {
+            if (measurePoints.length === 0) return;
+            const currentLatLng = e.latlng;
+            const tempPoints = [...measurePoints, currentLatLng];
+            measureLine.setLatLngs(tempPoints);
+
+            let totalDist = calculateTotalDistance(tempPoints);
+            let text = totalDist > 1000 ? (totalDist/1000).toFixed(2) + ' km' : Math.round(totalDist) + ' m';
+
+            if (!liveMoveMarker) {
+                liveMoveMarker = L.circleMarker(currentLatLng, { radius: 0, opacity: 0 }).addTo(map);
+            }
+            liveMoveMarker.setLatLng(currentLatLng);
+            liveMoveMarker.bindTooltip(`${text}<br><span style='font-size:10px; font-weight:normal; opacity:0.8;'>Double-clic pour fixer</span>`, {
+                permanent: true, direction: 'right', className: 'measure-tooltip', offset: [12, 0]
+            }).openTooltip();
+        }
+
+        function undoLastMeasurePoint() {
+            if (measurePoints.length <= 1) {
+                resetMeasure(false);
+                return;
+            }
+            measurePoints.pop();
+            const lastMarker = measureMarkers.pop();
+            if(lastMarker) map.removeLayer(lastMarker);
+            
+            measureLine.setLatLngs(measurePoints);
+            if(liveMoveMarker) map.removeLayer(liveMoveMarker);
+            liveMoveMarker = null;
+        }
+
+        function resetMeasure(completelyClose = false) {
+            if (measureLine) map.removeLayer(measureLine);
+            measureMarkers.forEach(m => map.removeLayer(m));
+            if (liveMoveMarker) map.removeLayer(liveMoveMarker);
+            
+            measurePoints = [];
+            measureMarkers = [];
+            liveMoveMarker = null;
+            
+            if(completelyClose) {
+                stopMeasuring(false);
+            } else {
+                measureLine = L.polyline([], { color: '#e74c3c', weight: 4, dashArray: '6, 8' }).addTo(map);
+            }
+        }
+
+        function stopMeasuring(keepVisualsOnMap = true) {
+            isMeasuring = false;
+            document.getElementById('measure-btn').classList.remove('active');
+            document.getElementById('measure-panel').style.display = 'none';
+            document.getElementById('map').style.cursor = '';
+
+            map.off('click', onMapMeasureClick);
+            map.off('mousemove', onMapMeasureMove);
+            setTimeout(() => { map.doubleClickZoom.enable(); }, 200);
+
+            if (liveMoveMarker) {
+                map.removeLayer(liveMoveMarker);
+                liveMoveMarker = null;
+            }
+
+            if (keepVisualsOnMap && measureLine && measurePoints.length > 0) {
+                measureLine.setStyle({ color: '#2c3e50', dashArray: null, weight: 3 });
+                // Ajouter un bouton de fermeture interactif sur la dernière infobulle
+                let total = calculateTotalDistance();
+                let finalStr = total > 1000 ? (total/1000).toFixed(2) + ' km' : Math.round(total) + ' m';
+                
+                if (measureMarkers.length > 0) {
+                    measureMarkers[measureMarkers.length - 1].bindTooltip(`<b>Distance Totale: ${finalStr}</b><br><span style='color:#e74c3c; font-size:10px; font-weight:bold;'>Cliquez sur la règle pour effacer</span>`, { permanent: true, className: 'measure-tooltip' });
+                    // Cliquer sur le dernier marqueur permet d'effacer le tracé
+                    measureMarkers[measureMarkers.length - 1].on('click', () => resetMeasure(true));
+                }
+            } else if (!keepVisualsOnMap) {
+                if (measureLine) map.removeLayer(measureLine);
+                measureMarkers.forEach(m => map.removeLayer(m));
+            }
+        }
+
+        function calculateTotalDistance(arr = measurePoints) {
+            let d = 0; for (let i = 0; i < arr.length - 1; i++) { d += arr[i].distanceTo(arr[i+1]); } return d;
+        }
+
+        /* --- VISUALISATION DES DONNÉES & INTEGRATION GOOGLE MAPS --- */
+        function closeSidebar() { document.getElementById('sidebar').classList.remove('active'); }
+        function isPharmacyOnDuty(f) { return f.properties.opening_hours === "24/7" || (f.id && f.id.charCodeAt(5) % 3 === 0); }
+
+        function showPharmacyDetails(feature, layer) {
+            const props = feature.properties;
+            const sideName = document.getElementById('side-name');
+            const sideContent = document.getElementById('sidebar-content');
+
+            sideName.innerText = props.name || "Pharmacie d'Abidjan";
+            const isGarde = isPharmacyOnDuty(feature);
+            
+            // Calcul des coordonnées cibles pour l'itinéraire intelligent
+            const coords = feature.geometry.type === 'Point' ? feature.geometry.coordinates : layer.getBounds().getCenter();
+            const lat = feature.geometry.type === 'Point' ? coords[1] : coords.lat;
+            const lng = feature.geometry.type === 'Point' ? coords[0] : coords.lng;
+
+            let html = isGarde ? `<span class="badge badge-garde"><i class="fa-solid fa-circle-dot"></i> ACTUELLEMENT DE GARDE</span>` : `<span class="badge badge-ouvert"><i class="fa-solid fa-door-open"></i> HORAIRES STANDARDS</span>`;
+
+            // Bouton Intelligent 1 : Itinéraire GPS direct via redirection Google Maps
+            let gMapsUrl = userLatLng 
+                ? `https://www.google.com/maps/dir/?api=1&origin=${userLatLng.lat},${userLatLng.lng}&destination=${lat},${lng}&travelmode=driving`
+                : `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+            
+            html += `<a href="${gMapsUrl}" target="_blank" class="action-routing-btn"><i class="fa-solid fa-diamond-turn-right"></i> Lancer l'itinéraire GPS</a>`;
+
+            // Bouton Intelligent 2 : Appel direct en cas d'urgence
+            if (props.phone) {
+                html += `<a href="tel:${props.phone}" class="action-call-btn"><i class="fa-solid fa-phone-volume"></i> Appeler l'officine (${props.phone})</a>`;
+            }
+
+            if (userLatLng) {
+                let currentPos = L.latLng(lat, lng);
+                let d = userLatLng.distanceTo(currentPos);
+                let dStr = d > 1000 ? (d/1000).toFixed(2) + " km" : Math.round(d) + " m";
+                html += `<div class="distance-box"><span><i class="fa-solid fa-location-arrow"></i> À vol d'oiseau :</span> <b>${dStr}</b></div>`;
+            }
+
+            html += `<h4 style="margin:15px 0 8px 0; color:#4a5568;">Détails pratiques</h4>`;
+            const mappedFields = { "addr:street": "Rue/Quartier", "addr:city": "Commune", "opening_hours": "Disponibilité", "phone": "Ligne Directe" };
+
+            for (let k in mappedFields) {
+                if (props[k]) {
+                    html += `<div class="info-row"><span class="info-label">${mappedFields[k]}</span><span class="info-value">${props[k]}</span></div>`;
+                }
+            }
+
+            sideContent.innerHTML = html;
+            document.getElementById('sidebar').classList.add('active');
+        }
+
+        function initPharmacies() {
+            fetch('export.geojson').then(res => res.json()).then(data => { 
+                rawGeoJSONData = data; 
+                renderPharmacies(); 
+            }).catch(() => alert("Erreur lors de la lecture des données cartographiques (export.geojson)"));
+        }
+
+        function renderPharmacies(searchQuery = '') {
+            if (geojsonLayer) map.removeLayer(geojsonLayer);
+            if (!rawGeoJSONData) return;
+
+            const q = searchQuery.toLowerCase().trim();
+
+            geojsonLayer = L.geoJSON(rawGeoJSONData, {
+                filter: (f) => {
+                    const isGarde = isPharmacyOnDuty(f);
+                    return (currentFilter === 'all' || (currentFilter === 'garde' && isGarde)) && (f.properties.name || '').toLowerCase().includes(q);
+                },
+                pointToLayer: (f, latlng) => {
+                    const isGarde = isPharmacyOnDuty(f);
+                    return L.marker(latlng, {
+                        icon: L.divIcon({
+                            className: isGarde ? 'pharmacy-icon-div on-duty' : 'pharmacy-icon-div',
+                            html: `<i class="fa-solid fa-plus-large">💊</i>`, iconSize: [30, 30], iconAnchor: [15, 15]
+                        })
+                    });
+                },
+                onEachFeature: (f, layer) => {
+                    layer.on('click', () => {
+                        if (isMeasuring) return;
+                        showPharmacyDetails(f, layer);
+                        map.setView(layer.getLatLng(), 15);
+                    });
+                }
+            }).addTo(map);
+        }
+
+        function filterData(type) {
+            currentFilter = type;
+            document.getElementById('btn-all').classList.remove('active');
+            document.getElementById('btn-garde').classList.remove('active');
+            if(type === 'all') document.getElementById('btn-all').classList.add('active');
+            if(type === 'garde') document.getElementById('btn-garde').classList.add('active');
+            closeSidebar();
+            renderPharmacies(document.getElementById('search-input').value);
+        }
+
+        function searchPharmacy() { renderPharmacies(document.getElementById('search-input').value); }
+
+        // Localisation Utilisateur en arrière-plan
+        map.locate({ setView: true, maxZoom: 13 });
+        map.on('locationfound', (e) => {
+            userLatLng = e.latlng;
+            L.marker(userLatLng, {
+                icon: L.divIcon({
+                    className: '',
+                    html: `<div style="background:#2980b9; width:16px; height:16px; border-radius:50%; border:3px solid white; box-shadow:0 0 12px rgba(0,0,0,0.4);"></div>`,
+                    iconSize: [22, 22], iconAnchor: [11, 11]
+                })
+            }).addTo(map);
+            initPharmacies();
+        });
+        map.on('locationerror', () => initPharmacies());
+
+        // Raccourci clavier global (Echap) pour annuler un point de mesure
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && isMeasuring) {
+                undoLastMeasurePoint();
+            }
+        });
+    </script>
+</body>
+</html>
